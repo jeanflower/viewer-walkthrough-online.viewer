@@ -67,7 +67,7 @@ npm start
 
 Open a browser and navigate to http://localhost:3000.
 
-Click on the `Authorize me` link and then click through the links on the browser to:
+Click on the `Generate access token for upload` link and then click through the links on the browser to:
   - Create a bucket
   - Save a supported file to a bucket
   - Display the file in a web browser
