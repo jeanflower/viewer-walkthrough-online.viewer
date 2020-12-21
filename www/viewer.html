@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html>
-
-<head>
-    <title>Autodesk Forge: 3D Viewer App Sample</title>
+  <head>
+    <title>Autodesk Forge: Walkthrough Tutorial - Viewer</title>
 
     <meta http-equiv="cache-control" content="max-age=0" />
     <meta http-equiv="cache-control" content="no-cache" />
@@ -12,92 +11,117 @@
     <!-- Third Party package -->
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
     <!-- Autodesk Forge Viewer files (IMPORTANT) -->
-    <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css" type="text/css">
+    <link
+      rel="stylesheet"
+      href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css"
+      type="text/css"
+    />
     <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
-    <style>
-        /** Just simple CSS styling to make this page a little nicer **/
-        body {
-            margin: 0;
-            padding: 0;
-        }
-    </style>
-</head>
+  </head>
 
-<body>
-    <!-- The Viewer will be instantiated here -->
+  <body>
+    <!-- The Viewer will be instantiated here --> 
     <div id="MyViewerDiv"></div>
     <!-- Custom script -->
     <script>
-        var viewer;
-        var options = {
-            env: 'AutodeskProduction',
-            api: 'derivativeV2', // TODO: for models uploaded to EMEA change this option to 'derivativeV2_EU'
-            getAccessToken: getForgeToken
-        };
-        var documentId = 'urn:' + getUrlParameter('urn');
+      let viewer;
+      const options = {
+        env: 'AutodeskProduction',
+        api: 'derivativeV2', // TODO: for models uploaded to EMEA change this option to 'derivativeV2_EU'
+        getAccessToken: getForgeReadToken,
+      };
 
-        // Run this when the page is loaded
-        Autodesk.Viewing.Initializer(options, function onInitialized(){
-            // Find the element where the 3d viewer will live.    
-            var htmlElement = document.getElementById('MyViewerDiv');
-            if (htmlElement) {
-                // Create and start the viewer in that element    
-                viewer = new Autodesk.Viewing.GuiViewer3D(htmlElement);
-                viewer.start();
-                // Load the document into the viewer.
-                Autodesk.Viewing.Document.load(documentId, onDocumentLoadSuccess, onDocumentLoadFailure);
-            }
-        });
-
-        /**
-        * Autodesk.Viewing.Document.load() success callback.
-        * Proceeds with model initialization.
-        */
-        function onDocumentLoadSuccess(doc) {
-            // Load the default viewable geometry into the viewer.
-            // Using the doc, we have access to the root BubbleNode,
-            // which references the root node of a graph that wraps each object from the Manifest JSON.
-            var viewable = doc.getRoot().getDefaultGeometry();
-            if (viewable) {
-                viewer.loadDocumentNode(doc, viewable).then(function(result) {
-                    console.log('Viewable Loaded!');
-                }).catch(function(err) {
-                    console.log('Viewable failed to load.');
-                    console.log(err);
-                }
-              )
-            }
+      // Run this when the page is loaded
+      Autodesk.Viewing.Initializer(options, function onInitialized() {
+        // Find the element where the 3d viewer will live.
+        const htmlElement = document.getElementById('MyViewerDiv');
+        if (htmlElement) {
+          // the Url comes with information about the urn of the 
+          // model to view - convert into a Viewer documentId
+          const documentId = 'urn:' + getUrlParameter('urn');
+          // Create and start the viewer in that element
+          viewer = new Autodesk.Viewing.GuiViewer3D(htmlElement);
+          viewer.start();
+          // Load the document into the viewer.
+          Autodesk.Viewing.Document.load(
+            documentId,
+            onDocumentLoadSuccess, // callback on success
+            onDocumentLoadFailure // callback on failure
+          );
+        } else {
+          console.error(
+            "expected to find a div with ID MyViewerDiv but none found"
+          );
         }
+      });
 
-        /**
-        * Autodesk.Viewing.Document.load() failure callback.
-        */
-        function onDocumentLoadFailure(viewerErrorCode) {
-            console.error('onDocumentLoadFailure() - errorCode: ' + viewerErrorCode);
-            jQuery('#MyViewerDiv').html('<p>Translation in progress... Please try refreshing the page.</p>');
-        }
-
-        // Get Query string from URL,
-        // we will use this to get the value of 'urn' from URL
-        function getUrlParameter(name) {
-            name = name.replace(/[[]/, '\\[').replace(/[\]]/, '\\]');
-            var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
-            var results = regex.exec(location.search);
-            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
-        }
-
-        // Get public access token for read only,
-        // using ajax to access route /api/forge/oauth/public in the background
-        function getForgeToken(callback) {
-            jQuery.ajax({
-                url: '/api/forge/oauth/public',
-                success: function (res) {
-                    callback(res.access_token, res.expires_in);
-                }
+      /**
+       * Autodesk.Viewing.Document.load() success callback.
+       * Proceeds with model initialization.
+       */
+      function onDocumentLoadSuccess(doc) {
+        // Load the default viewable geometry into the viewer.
+        // Using the doc, we have access to the root BubbleNode,
+        // which references the root node of a graph that wraps each object from the Manifest JSON.
+        const viewable = doc.getRoot().getDefaultGeometry();
+        if (viewable) {
+          viewer
+            .loadDocumentNode(doc, viewable)
+            .then(function (result) {
+              console.log('Viewable Loaded!');
+            })
+            .catch(function (err) {
+              console.log('Viewable failed to load');
+              console.log(err);
             });
+        } else {
+          console.log('No viewable in doc');
         }
-        
-  </script>
-</body>
+      }
+
+      /**
+       * Autodesk.Viewing.Document.load() failure callback.
+       */
+      function onDocumentLoadFailure(viewerErrorCode, viewerErrorMsg) {
+        console.log(
+          'onDocumentLoadFailure() - errorCode: ' +
+            viewerErrorCode +
+            ',' +
+            viewerErrorMsg
+        );
+        jQuery('#MyViewerDiv').html(
+          '<p>Translation in progress... Please try refreshing the page.</p>'
+        );
+      }
+
+      // Get Query string from URL,
+      // we will use this to get the value of 'urn' from URL
+      function getUrlParameter(name) {
+        name = name.replace(/[[]/, '\\[').replace(/[\]]/, '\\]');
+        const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+        const thisUrlParams = location.search;
+        // console.log('thisUrlParams begins ' + thisUrlParams.substring(0,10));
+        const results = regex.exec(thisUrlParams);
+        const result =
+          results === null
+            ? ''
+            : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        // console.log('param for ' + name + ' begins ' + result.substring(0,10));
+        return result;
+      }
+
+      // Get public access token for read only,
+      // using ajax to access route /api/forge/oauth/public in the background
+      function getForgeReadToken(callback) {
+        jQuery.ajax({
+          url: '/api/forge/oauth/public',
+          success: function (res) {
+            callback(res.access_token, res.expires_in);
+          },
+        });
+      }
+
+    </script>
+  </body>
 
 </html>

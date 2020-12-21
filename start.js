@@ -20,19 +20,21 @@
 // Run `npm install` to install them.
 // 'path' is part of Node.js and thus not inside package.json.
 //-------------------------------------------------------------------
-var express = require('express');           // For web server
-var Axios = require('axios');               // A Promised base http client
-var bodyParser = require('body-parser');    // Receive JSON format
+const express = require('express');           // For web server
+const Axios = require('axios');               // A Promised base http client
+const body_parser = require('body-parser');    // Receive JSON format
 
 // Set up Express web server
-var app = express();
-app.use(bodyParser.json());
+const app = express();
+app.use(body_parser.json());
 app.use(express.static(__dirname + '/www'));
 
 // This is for web server to start listening to port 3000
-app.set('port', 3000);
-var server = app.listen(
-  app.get('port'), 
+const PORT = process.env.PORT || 3000;
+// console.log(`PORT = ${PORT}`);
+app.set('port', PORT);
+const server = app.listen(
+  app.get('port'),
   () => {
     console.log('Server listening on port ' + server.address().port);
   }
@@ -43,13 +45,26 @@ var server = app.listen(
 // Initialize the 2-legged OAuth2 client, and
 // set specific scopes
 //-------------------------------------------------------------------
-var FORGE_CLIENT_ID = process.env.FORGE_CLIENT_ID;
-var FORGE_CLIENT_SECRET = process.env.FORGE_CLIENT_SECRET;
-var access_token = '';
-var scopes = 'data:read data:write data:create bucket:create bucket:read';
+const FORGE_CLIENT_ID = process.env.FORGE_CLIENT_ID;
+const FORGE_CLIENT_SECRET = process.env.FORGE_CLIENT_SECRET;
+
+if (FORGE_CLIENT_ID === undefined) {
+  console.log(`You need to set an environment variable for FORGE_CLIENT_ID`);
+}
+if (FORGE_CLIENT_SECRET === undefined) {
+  console.log(`You need to set an environment variable for FORGE_CLIENT_SECRET`);
+}
+
+let access_token = '';
+const scopes = 'data:read data:write data:create bucket:create bucket:read';
 const querystring = require('querystring');
 
-// // Route /api/forge/oauth
+// Route /api/forge/oauth
+// uses oath
+// pass in 
+// data : client_id, client_secret, grant_type, scopes
+// get back an access_token
+// and redirect to /api/forge/datamanagement/bucket/create
 app.get('/api/forge/oauth', (req, res) => {
   Axios({
     method: 'POST',
@@ -61,23 +76,29 @@ app.get('/api/forge/oauth', (req, res) => {
       client_id: FORGE_CLIENT_ID,
       client_secret: FORGE_CLIENT_SECRET,
       grant_type: 'client_credentials',
-      scope: scopes
+      scope: scopes, //read-, write-, create- data and create- read- bucket
     })
   })
     .then((response) => {
       // Success
+      console.log('/api/forge/oauth success');
       access_token = response.data.access_token;
-      console.log(response);
+      // console.log(response);
       res.redirect('/api/forge/datamanagement/bucket/create');
     })
     .catch((error) => {
       // Failed
+      console.log('/api/forge/oauth fail');
       console.log(error);
-      res.send('Failed to authenticate');
+      res.send('Failed to authenticate, check client id and client secret');
     });
 });
 
 // Route /api/forge/oauth/public
+// uses oath
+// pass in 
+// data: clientId, clientSecret, grantType, scopes
+// get back an access_token
 app.get('/api/forge/oauth/public', (req, res) => {
   // Limit public token to Viewer read only
   Axios({
@@ -95,23 +116,41 @@ app.get('/api/forge/oauth/public', (req, res) => {
   })
     .then((response) => {
       // Success
-      console.log(response);
-      res.json({ access_token: response.data.access_token, expires_in: response.data.expires_in });
+      console.log('/api/forge/oauth/public success getting public access token');
+      // console.log(response);
+      res.json({
+        access_token: response.data.access_token,
+        expires_in: response.data.expires_in,
+      });
     })
     .catch((error) => {
       // Failed
+      console.log('/api/forge/oauth/public fail getting public access token');
       console.log(error);
       res.status(500).json(error);
     });
 });
 
-// Buckey key and Policy Key for OSS
-const bucketKey = FORGE_CLIENT_ID.toLowerCase() + '_tutorial_bucket'; // Prefix with your ID so the bucket key is unique across all buckets on all other accounts
-const policyKey = 'transient'; // Expires in 24hr
+// Bucket key and Policy Key for OSS
+// Prefix with your ID so the bucket key is 
+// unique across all buckets on all other accounts
+const bucket_key =
+  FORGE_CLIENT_ID.toLowerCase()
+  + '_tutorial_bucket';
+const policy_key = 'transient'; // Expires in 24hr
 
 // Route /api/forge/datamanagement/bucket/create
+// uses datamanagement
+// pass in 
+// headers: access_token, 
+// data: bucketKey and policyKey
+// redirect to /api/forge/datamanagement/bucket/detail
 app.get('/api/forge/datamanagement/bucket/create', (req, res) => {
   // Create an application shared bucket using access token from previous route
+  if (access_token === '') {
+    console.log('Missing access token');
+    res.send('Missing access token');
+  }
   // We will use this bucket for storing all files in this tutorial
   Axios({
     method: 'POST',
@@ -121,85 +160,119 @@ app.get('/api/forge/datamanagement/bucket/create', (req, res) => {
       Authorization: 'Bearer ' + access_token
     },
     data: JSON.stringify({
-      'bucketKey': bucketKey,
-      'policyKey': policyKey
+      'bucketKey': bucket_key,
+      'policyKey': policy_key
     })
   })
     .then((response) => {
       // Success
-      console.log(response);
+      console.log('/api/forge/datamanagement/bucket/create success, validate by seeking details');
+      // console.log(response);
       res.redirect('/api/forge/datamanagement/bucket/detail');
     })
     .catch((error) => {
+      console.log('/api/forge/datamanagement/bucket/create fail to create a new bucket');
       if (error.response && error.response.status == 409) {
-        console.log('Bucket already exists, skip creation.');
+        console.log('Bucket already exists, validate by seeking details');
         res.redirect('/api/forge/datamanagement/bucket/detail');
+      } else {
+        // Failed
+        console.log(error);
+        res.send('Failed to create a new bucket');
       }
-      // Failed
-      console.log(error);
-      res.send('Failed to create a new bucket');
     });
 });
 
 // Route /api/forge/datamanagement/bucket/detail
+// uses datamanagement
+// pass in 
+// url: bucketKey, 
+// headers: access_token
+// redirect to /upload.html
 app.get('/api/forge/datamanagement/bucket/detail', (req, res) => {
+  if (access_token === '') {
+    console.log('Missing access token');
+    res.send('Missing access token');
+  }
   Axios({
     method: 'GET',
-    url: 'https://developer.api.autodesk.com/oss/v2/buckets/' + encodeURIComponent(bucketKey) + '/details',
+    url:
+      'https://developer.api.autodesk.com/oss/v2/buckets/'
+      + encodeURIComponent(bucket_key)
+      + '/details',
     headers: {
       Authorization: 'Bearer ' + access_token
     }
   })
     .then((response) => {
       // Success
-      console.log(response);
+      console.log('/api/forge/datamanagement/bucket/detail success - bucket verified');
+      console.log('present upload page and ready for further interaction\n');
+      // console.log(response);
       res.redirect('/upload.html');
     })
     .catch((error) => {
       // Failed
+      console.log('/api/forge/datamanagement/bucket/detail fail');
       console.log(error);
       res.send('Failed to verify the new bucket');
     });
 });
 
 // For converting the source into a Base64-Encoded string
-var Buffer = require('buffer').Buffer;
-String.prototype.toBase64 = function() { // needs 'this'
-  // Buffer is part of Node.js to enable interaction with octet streams in TCP streams, 
-  // file system operations, and other contexts.
-  return new Buffer(this).toString('base64');
+Buffer = require('buffer').Buffer;
+String.prototype.toBase64 = function () { // needs 'this'
+  // Create buffer object, specifying utf8 as encoding
+  let buffer_obj = Buffer.from(this, "utf8");
+  // Encode the Buffer as a base64 string
+  return buffer_obj.toString("base64");
 };
 
-var multer = require('multer');         // To handle file upload
-var upload = multer({ dest: 'tmp/' }); // Save file into local /tmp folder
+const multer = require('multer');         // To handle file upload
+const upload = multer({ dest: 'tmp/' }); // Save file into local /tmp folder
 
 // Route /api/forge/datamanagement/bucket/upload
-app.post(
-  '/api/forge/datamanagement/bucket/upload', 
-  upload.single('fileToUpload'), 
+// uses datamanagement
+// pass in 
+// url: bucketKey, originalname
+// headers: access_token, originalname
+// data: filecontent
+// redirect to /api/forge/modelderivative/ with urn
+app.post('/api/forge/datamanagement/bucket/upload',
+  upload.single('fileToUpload'),
   (req, res) => {
-    var fs = require('fs'); // Node.js File system for reading files
+    if (access_token === '') {
+      console.log('Missing access token');
+      res.send('Missing access token');
+    }
+    const fs = require('fs'); // Node.js File system for reading files
     fs.readFile(
-      req.file.path, 
-      (err, filecontent) => {
+      req.file.path,
+      (err, file_content) => {
         Axios({
           method: 'PUT',
-          url: 'https://developer.api.autodesk.com/oss/v2/buckets/' + encodeURIComponent(bucketKey) + '/objects/' + encodeURIComponent(req.file.originalname),
+          url:
+            'https://developer.api.autodesk.com/oss/v2/buckets/'
+            + encodeURIComponent(bucket_key)
+            + '/objects/'
+            + encodeURIComponent(req.file.originalname),
           headers: {
             Authorization: 'Bearer ' + access_token,
             'Content-Disposition': req.file.originalname,
-            'Content-Length': filecontent.length
+            'Content-Length': file_content.length
           },
-          data: filecontent
+          data: file_content
         })
         .then((response) => {
           // Success
-          console.log(response);
-          var urn = response.data.objectId.toBase64();
+          console.log('/api/forge/datamanagement/bucket/upload success');
+          // console.log(response);
+          const urn = response.data.objectId.toBase64();
           res.redirect('/api/forge/modelderivative/' + urn);
         })
         .catch((error) => {
           // Failed
+          console.log('/api/forge/datamanagement/bucket/upload fail');
           console.log(error);
           res.send('Failed to create a new object in the bucket');
         });
@@ -208,12 +281,22 @@ app.post(
 );
 
 // Route /api/forge/modelderivative
+// uses modelderivative
+// pass in
+// params: urn
+// headers: access_token
+// data: urn
+// redirect to /viewer.html?urn=' + urn
 app.get(
-  '/api/forge/modelderivative/:urn', 
+  '/api/forge/modelderivative/:urn',
   (req, res) => {
-    var urn = req.params.urn;
-    var format_type = 'svf';
-    var format_views = ['2d', '3d'];
+    if (access_token === '') {
+      console.log('Missing access token');
+      res.send('Missing access token');
+    }
+    const urn = req.params.urn;
+    const format_type = 'svf';
+    const format_views = ['2d', '3d'];
     Axios({
       method: 'POST',
       url: 'https://developer.api.autodesk.com/modelderivative/v2/designdata/job',
@@ -237,12 +320,14 @@ app.get(
     })
     .then((response) => {
       // Success
-      console.log(response);
+      console.log('/api/forge/modelderivative/:urn success');
+      // console.log(response);
       res.redirect('/viewer.html?urn=' + urn);
     })
     .catch((error) => {
       // Failed
-      console.log(error);
+      console.log('/api/forge/modelderivative/:urn fail');
+      // console.log(error);
       res.send('Error at Model Derivative job.');
     });
-});
+  });
